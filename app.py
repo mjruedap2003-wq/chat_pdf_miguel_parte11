@@ -1,92 +1,124 @@
 import os
+import platform
 import streamlit as st
 from PIL import Image
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.llms import OpenAI
+from langchain_community.vectorstores import FAISS
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
-import platform
+from collections import Counter
+import re
 
-# App title and presentation
-st.title('Generación Aumentada por Recuperación (RAG) 💬')
-st.write("Versión de Python:", platform.python_version())
+# Configuración de la página
+st.set_page_config(page_title="Analizador RAG de PDFs", page_icon="📄", layout="wide")
 
-# Load and display image
+st.title('Generador RAG + Analizador de PDFs 📄🤖')
+st.caption(f"Versión de Python: {platform.python_version()}")
+
+# Cargar imagen si existe
 try:
     image = Image.open('Chat_pdf.png')
-    st.image(image, width=350)
-except Exception as e:
-    st.warning(f"No se pudo cargar la imagen: {e}")
+    st.image(image, width=300)
+except Exception:
+    pass
 
-# Sidebar information
+# Barra lateral
 with st.sidebar:
-    st.subheader("Este Agente te ayudará a realizar análisis sobre el PDF cargado")
+    st.header("🔑 Configuración")
+    api_key = st.text_input('Ingresa tu API Key de Google Gemini', type="password")
+    st.markdown("[Obtén tu API Key gratuita aquí](https://aistudio.google.com/)")
+    
+    st.divider()
+    st.subheader("💡 Características Originales")
+    st.write("• Resumen Ejecutivo Automático")
+    st.write("• Extracción de Palabras Clave")
+    st.write("• Búsqueda y RAG conversacional")
 
-# Get API key from user
-ke = st.text_input('Ingresa tu Clave de OpenAI', type="password")
-if ke:
-    os.environ['OPENAI_API_KEY'] = ke
-else:
-    st.warning("Por favor ingresa tu clave de API de OpenAI para continuar")
+if api_key:
+    os.environ['GOOGLE_API_KEY'] = api_key
 
-# PDF uploader
-pdf = st.file_uploader("Carga el archivo PDF", type="pdf")
+pdf = st.file_uploader("Carga tu archivo PDF aquí", type="pdf")
 
-# Process the PDF if uploaded
-if pdf is not None and ke:
+if pdf is not None and api_key:
     try:
-        # Extract text from PDF
+        # 1. Extracción de texto
         pdf_reader = PdfReader(pdf)
         text = ""
         for page in pdf_reader.pages:
-            text += page.extract_text()
-        
-        st.info(f"Texto extraído: {len(text)} caracteres")
-        
-        # Split text into chunks
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
+
+        st.info(f"📊 **Métricas del documento:** {len(pdf_reader.pages)} páginas | {len(text)} caracteres")
+
+        # =========================================================
+        # APORTE ORIGINAL 1: Análisis estadístico de Palabras Clave
+        # =========================================================
+        st.subheader("📌 Análisis de Palabras Clave del PDF")
+        # Limpiar texto para obtener palabras más relevantes
+        words = re.findall(r'\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,}\b', text.lower())
+        stopwords = {"para", "como", "esta", "este", "entre", "sobre", "donde", "cuando", "desde", "hasta", "este", "estos", "estas"}
+        filtered_words = [w for w in words if w not in stopwords]
+        common_words = Counter(filtered_words).most_common(8)
+
+        cols = st.columns(len(common_words))
+        for idx, (word, count) in enumerate(common_words):
+            cols[idx].metric(label=word.capitalize(), value=f"{count}x")
+
+        # 2. División del texto en fragmentos (Chunks)
         text_splitter = CharacterTextSplitter(
             separator="\n",
-            chunk_size=500,
-            chunk_overlap=20,
+            chunk_size=800,
+            chunk_overlap=100,
             length_function=len
         )
         chunks = text_splitter.split_text(text)
-        st.success(f"Documento dividido en {len(chunks)} fragmentos")
-        
-        # Create embeddings and knowledge base
-        embeddings = OpenAIEmbeddings()
-        knowledge_base = FAISS.from_texts(chunks, embeddings)
-        
-        # User question interface
-        st.subheader("Escribe qué quieres saber sobre el documento")
-        user_question = st.text_area(" ", placeholder="Escribe tu pregunta aquí...")
-        
-        # Process question when submitted
+
+        # 3. Embeddings e Índice vectorial con Gemini
+        with st.spinner("Creando base de conocimiento vectorial..."):
+            embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+            knowledge_base = FAISS.from_texts(chunks, embeddings)
+
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+
+        # =========================================================
+        # APORTE ORIGINAL 2: Resumen Ejecutivo Automático
+        # =========================================================
+        with st.expander("✨ Generar Resumen Ejecutivo Automático del Documento", expanded=False):
+            if st.button("Generar Resumen e Ideas Principales"):
+                with st.spinner("Sintetizando el documento..."):
+                    docs_summary = knowledge_base.similarity_search("resumen introduccion objetivos conclusiones", k=4)
+                    chain_summary = load_qa_chain(llm, chain_type="stuff")
+                    prompt_resumen = "Haz un resumen ejecutivo corto de este documento en 3 viñetas y extrae los 3 objetivos principales."
+                    summary_response = chain_summary.run(input_documents=docs_summary, question=prompt_resumen)
+                    st.markdown(summary_response)
+
+        st.divider()
+
+        # 4. Preguntas y Respuestas (RAG)
+        st.subheader("💬 Haz una pregunta específica sobre el PDF")
+        user_question = st.text_input("Escribe tu pregunta:", placeholder="Ej: ¿Cuáles son las conclusiones principales?")
+
         if user_question:
-            docs = knowledge_base.similarity_search(user_question)
-            
-            # Use a current model instead of deprecated text-davinci-003
-            # Options: "gpt-3.5-turbo-instruct" or "gpt-4o" depending on your API access
-            llm = OpenAI(temperature=0, model_name="gpt-4o-mini-2024-07-18")
-            
-            # Load QA chain
-            chain = load_qa_chain(llm, chain_type="stuff")
-            
-            # Run the chain
-            response = chain.run(input_documents=docs, question=user_question)
-            
-            # Display the response
-            st.markdown("### Respuesta:")
-            st.markdown(response)
-                
+            with st.spinner("Buscando en el documento..."):
+                docs = knowledge_base.similarity_search(user_question, k=3)
+                chain = load_qa_chain(llm, chain_type="stuff")
+                response = chain.run(input_documents=docs, question=user_question)
+
+                st.markdown("### 🤖 Respuesta del Asistente:")
+                st.write(response)
+
+                # Mostrar fuentes/contextos recuperados
+                with st.expander("Ver fragmentos del PDF utilizados para responder"):
+                    for i, doc in enumerate(docs):
+                        st.write(f"**Fragmento {i+1}:**")
+                        st.caption(doc.page_content)
+
     except Exception as e:
         st.error(f"Error al procesar el PDF: {str(e)}")
-        # Add detailed error for debugging
-        import traceback
-        st.error(traceback.format_exc())
-elif pdf is not None and not ke:
-    st.warning("Por favor ingresa tu clave de API de OpenAI para continuar")
+
+elif pdf is not None and not api_key:
+    st.warning("⚠️ Ingresa tu API Key de Google Gemini en la barra lateral para procesar el archivo.")
 else:
-    st.info("Por favor carga un archivo PDF para comenzar")
+    st.info("👈 Ingresa tu API Key y carga un archivo PDF para comenzar.")
