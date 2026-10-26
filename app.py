@@ -62,12 +62,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# 4. Cargar imagen Gus_imagen.png subida a la raíz de GitHub
-try:
-    image = Image.open('Gus_imagen.png')
-    st.image(image, width=280)
-except Exception as e:
-    st.warning(f"No se pudo cargar 'Gus_imagen.png': {e}")
+
 
 # Obtener clave guardada desde Streamlit Secrets si existe
 secret_key = st.secrets.get("GOOGLE_API_KEY", "")
