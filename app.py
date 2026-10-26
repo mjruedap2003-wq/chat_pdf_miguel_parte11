@@ -15,7 +15,7 @@ st.write("Versión de Python:", platform.python_version())
 
 # Load and display image
 try:
-    image = Image.open('Gusimagen.png')
+    image = Image.open('Gus_imagen.png')
     st.image(image, width=350)
 except Exception as e:
     st.warning(f"No se pudo cargar la imagen: {e}")
