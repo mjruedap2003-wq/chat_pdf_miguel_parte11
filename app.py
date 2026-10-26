@@ -109,10 +109,12 @@ if pdf is not None:
             c1.metric("Páginas Totales", len(pdf_reader.pages))
             c2.metric("Caracteres Extraídos", f"{len(text):,}")
             c3.metric("Palabras Procesadas", f"{len(text.split()):,}")
-
-            # Análisis de Palabras Clave
+            
+# Análisis de Palabras Clave
             st.divider()
             st.subheader("🔑 Palabras Más Frecuentes")
             
             words = re.findall(r'\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{5,}\b', text.lower())
-            stopwords = {"sobre
+            stopwords = {"sobre", "entre", "hasta", "desde", "donde", "cuando", "porque", "esta", "este", "estos", "mismo", "tiene", "todos"}
+            filtered_words = [w for w in words if w not in stopwords]
+            common_words = Counter(filtered_words).most_common(5)
