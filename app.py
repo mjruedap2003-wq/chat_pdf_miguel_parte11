@@ -64,7 +64,7 @@ st.markdown("""
 
 # 4. Cargar imagen Gus_imagen.png subida a la raíz de GitHub
 try:
-    image = Image.open('Gus_imagen.png')
+    image = Image.open('Retrato_Miguel.jpg')
     st.image(image, width=280)
 except Exception as e:
     st.warning(f"No se pudo cargar 'Gus_imagen.png': {e}")
