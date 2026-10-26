@@ -42,7 +42,7 @@ st.markdown("""
         border: 1px solid #E5E7E9;
     }
     </style>
-""", unsafe_allow_html=unsafe_allow_ok=True)
+""", unsafe_allow_html=True)
 
 # 2. Encabezado y Marca Personal
 st.markdown('<p class="main-title">Análisis Inteligente de PDFs (RAG) 💬</p>', unsafe_allow_html=True)
