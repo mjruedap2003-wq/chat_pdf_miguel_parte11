@@ -144,7 +144,7 @@ if pdf is not None:
                     chain = prompt | llm | StrOutputParser()
                     response = chain.invoke({"context": context_text, "question": user_question})
 
-                    # Mostrar Respuesta
+# Mostrar Respuesta
                     st.markdown("#### 🤖 Respuesta del Asistente:")
                     st.info(response)
 
@@ -152,4 +152,9 @@ if pdf is not None:
                     with st.expander("🔍 Ver fragmentos de texto recuperados (RAG Context)"):
                         for i, doc in enumerate(docs):
                             st.caption(f"**Fragmento {i+1}:**")
-                            st.text(doc.page_content
+                            st.text(doc.page_content)
+
+        except Exception as e:
+            st.error(f"Error al procesar el archivo: {str(e)}")
+else:
+    st.info("💡 Por favor, sube un archivo PDF para comenzar con el análisis.")
