@@ -69,11 +69,15 @@ try:
 except Exception:
     pass
 
+# Obtener clave desde Secrets si existe
+secret_key = st.secrets.get("GOOGLE_API_KEY", "")
+
 # 4. Barra Lateral
 with st.sidebar:
     st.header("⚙️ Configuración")
     
-    ke = st.text_input('API Key de Google Gemini', type="password", help="Genera tu llave gratuita en Google AI Studio")
+    ke = st.text_input('API Key de Google Gemini', value=secret_key, type="password", help="Ingresa tu clave de Gemini")
+    
     if ke:
         os.environ['GOOGLE_API_KEY'] = ke
         st.success("🔑 Key conectada")
