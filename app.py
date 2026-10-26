@@ -10,7 +10,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 
 # Cadenas de QA
-from langchain.chains.question_answering import load_qa_chain
+from langchain_classic.chains.question_answering import load_qa_chain
 
 # Configuración de la página
 st.set_page_config(page_title="Analizador RAG de PDFs", page_icon="📄", layout="wide")
