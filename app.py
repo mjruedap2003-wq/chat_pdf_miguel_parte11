@@ -137,7 +137,7 @@ if pdf is not None:
             chunks = text_splitter.split_text(text)
 
             with st.spinner("⚡ Creando base de conocimiento con Gemini Embeddings..."):
-                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+                embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
                 knowledge_base = FAISS.from_texts(chunks, embeddings)
                 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2)
 
