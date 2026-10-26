@@ -1,92 +1,175 @@
 import os
+import re
+import platform
+from collections import Counter
 import streamlit as st
 from PIL import Image
 from PyPDF2 import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.llms import OpenAI
-from langchain.chains.question_answering import load_qa_chain
-import platform
 
-# App title and presentation
-st.title('Generación Aumentada por Recuperación (RAG) 💬')
-st.write("Versión de Python:", platform.python_version())
+# Componentes actualizados de LangChain (Sintaxis LCEL v0.3+)
+from langchain_text_splitters import CharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
-# Load and display image
+# 1. Configuración de la página
+st.set_page_config(
+    page_title="RAG PDF Studio | Miguel Rueda",
+    page_icon="⚡",
+    layout="wide"
+)
+
+# 2. CSS Estilo Azul y Amarillo
+st.markdown("""
+    <style>
+    .header-container {
+        background: linear-gradient(135deg, #0A2540 0%, #1A365D 100%);
+        padding: 2rem;
+        border-radius: 12px;
+        border-left: 8px solid #F6AD55;
+        color: white;
+        margin-bottom: 2rem;
+    }
+    .header-title {
+        font-size: 2.2rem;
+        font-weight: 800;
+        margin: 0;
+        color: #FFFFFF;
+    }
+    .yellow-txt {
+        color: #ECC94B;
+    }
+    .header-sub {
+        color: #90CDF4;
+        font-size: 1rem;
+        margin-top: 5px;
+    }
+    div[data-testid="stMetric"] {
+        background-color: #EBF8FF !important;
+        border: 2px solid #BEE3F8 !important;
+        border-radius: 10px !important;
+        padding: 12px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 3. Encabezado principal
+st.markdown("""
+    <div class="header-container">
+        <h1 class="header-title">⚡ RAG PDF <span class="yellow-txt">Studio</span></h1>
+        <p class="header-sub">Análisis inteligente de documentos con IA y búsqueda vectorial</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# 4. Cargar imagen Gus_imagen.png subida a la raíz de GitHub
 try:
     image = Image.open('Gus_imagen.png')
-    st.image(image, width=350)
+    st.image(image, width=280)
 except Exception as e:
-    st.warning(f"No se pudo cargar la imagen: {e}")
+    st.warning(f"No se pudo cargar 'Gus_imagen.png': {e}")
 
-# Sidebar information
+# Obtener clave guardada desde Streamlit Secrets si existe
+secret_key = st.secrets.get("GOOGLE_API_KEY", "")
+
+# 5. Barra Lateral
 with st.sidebar:
-    st.subheader("Este Agente te ayudará a realizar análisis sobre el PDF cargado")
+    st.header("⚙️ Configuración")
+    
+    ke = st.text_input('API Key de Google Gemini', value=secret_key, type="password", help="Ingresa tu clave de Gemini")
+    
+    if ke:
+        os.environ['GOOGLE_API_KEY'] = ke
+        st.success("🔑 Key conectada")
+    else:
+        st.warning("⚠️ Ingresa tu API Key para activar el bot.")
 
-# Get API key from user
-ke = st.text_input('Ingresa tu Clave de OpenAI', type="password")
-if ke:
-    os.environ['OPENAI_API_KEY'] = ke
+    st.divider()
+    st.write("**Desarrollado por:**")
+    st.write("Miguel Rueda")
+    st.caption("Diseño Interactivo • EAFIT")
+    st.caption(f"Python v{platform.python_version()}")
+
+# 6. Carga y Procesamiento del PDF
+st.subheader("📁 1. Cargar Documento PDF")
+pdf = st.file_uploader("Sube tu archivo PDF aquí", type="pdf")
+
+if pdf is not None:
+    if not ke:
+        st.warning("👈 Por favor, ingresa tu API Key en la barra lateral para continuar.")
+    else:
+        try:
+            pdf_reader = PdfReader(pdf)
+            text = ""
+            for page in pdf_reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
+
+            st.divider()
+            st.subheader("📊 Métricas del Documento")
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Páginas Totales", len(pdf_reader.pages))
+            c2.metric("Caracteres Extraídos", f"{len(text):,}")
+            c3.metric("Palabras Procesadas", f"{len(text.split()):,}")
+
+            # Análisis de Palabras Clave
+            st.divider()
+            st.subheader("🔑 Palabras Más Frecuentes")
+            
+            words = re.findall(r'\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{5,}\b', text.lower())
+            stopwords = {"sobre", "entre", "hasta", "desde", "donde", "cuando", "porque", "esta", "este", "estos", "mismo", "tiene", "todos"}
+            filtered_words = [w for w in words if w not in stopwords]
+            common_words = Counter(filtered_words).most_common(5)
+
+            k_cols = st.columns(len(common_words))
+            for idx, (word, count) in enumerate(common_words):
+                k_cols[idx].metric(label=f"#{idx+1} {word.capitalize()}", value=f"{count}x")
+
+            # Separación de Texto y FAISS con Embeddings Actualizados
+            text_splitter = CharacterTextSplitter(
+                separator="\n",
+                chunk_size=700,
+                chunk_overlap=100,
+                length_function=len
+            )
+            chunks = text_splitter.split_text(text)
+
+            with st.spinner("⚡ Creando base de conocimiento con Gemini Embeddings..."):
+                # Se utiliza el modelo actualizado para evitar errores 404
+                embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+                knowledge_base = FAISS.from_texts(chunks, embeddings)
+                llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2)
+
+            # Sección de Preguntas
+            st.divider()
+            st.subheader("💬 2. Haz una Pregunta al PDF")
+            user_question = st.text_input("Escribe tu consulta sobre el texto:", placeholder="Ej: ¿Cuáles son las conclusiones principales?")
+
+            if user_question:
+                with st.spinner("🔍 Consultando al modelo..."):
+                    docs = knowledge_base.similarity_search(user_question, k=3)
+                    
+                    context_text = "\n\n".join([doc.page_content for doc in docs])
+                    prompt = ChatPromptTemplate.from_template(
+                        "Responde a la siguiente pregunta utilizando únicamente el contexto proveído.\n"
+                        "Si la respuesta no está presente en el contexto, indica amablemente que no se encuentra en el archivo.\n\n"
+                        "Contexto:\n{context}\n\n"
+                        "Pregunta: {question}"
+                    )
+                    chain = prompt | llm | StrOutputParser()
+                    response = chain.invoke({"context": context_text, "question": user_question})
+
+                    st.markdown("#### 🤖 Respuesta:")
+                    st.info(response)
+
+                    with st.expander("🔎 Ver fragmentos recuperados (RAG Context)"):
+                        for i, doc in enumerate(docs):
+                            st.write(f"**Fragmento {i+1}:**")
+                            st.caption(doc.page_content)
+
+        except Exception as e:
+            st.error(f"Error procesando el PDF: {str(e)}")
 else:
-    st.warning("Por favor ingresa tu clave de API de OpenAI para continuar")
-
-# PDF uploader
-pdf = st.file_uploader("Carga el archivo PDF", type="pdf")
-
-# Process the PDF if uploaded
-if pdf is not None and ke:
-    try:
-        # Extract text from PDF
-        pdf_reader = PdfReader(pdf)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-        
-        st.info(f"Texto extraído: {len(text)} caracteres")
-        
-        # Split text into chunks
-        text_splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=500,
-            chunk_overlap=20,
-            length_function=len
-        )
-        chunks = text_splitter.split_text(text)
-        st.success(f"Documento dividido en {len(chunks)} fragmentos")
-        
-        # Create embeddings and knowledge base
-        embeddings = OpenAIEmbeddings()
-        knowledge_base = FAISS.from_texts(chunks, embeddings)
-        
-        # User question interface
-        st.subheader("Escribe qué quieres saber sobre el documento")
-        user_question = st.text_area(" ", placeholder="Escribe tu pregunta aquí...")
-        
-        # Process question when submitted
-        if user_question:
-            docs = knowledge_base.similarity_search(user_question)
-            
-            # Use a current model instead of deprecated text-davinci-003
-            # Options: "gpt-3.5-turbo-instruct" or "gpt-4o" depending on your API access
-            llm = OpenAI(temperature=0, model_name="gpt-4o-mini-2024-07-18")
-            
-            # Load QA chain
-            chain = load_qa_chain(llm, chain_type="stuff")
-            
-            # Run the chain
-            response = chain.run(input_documents=docs, question=user_question)
-            
-            # Display the response
-            st.markdown("### Respuesta:")
-            st.markdown(response)
-                
-    except Exception as e:
-        st.error(f"Error al procesar el PDF: {str(e)}")
-        # Add detailed error for debugging
-        import traceback
-        st.error(traceback.format_exc())
-elif pdf is not None and not ke:
-    st.warning("Por favor ingresa tu clave de API de OpenAI para continuar")
-else:
-    st.info("Por favor carga un archivo PDF para comenzar")
+    st.info("💡 Sube un archivo PDF en el panel superior para comenzar.")
