@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Seguro (sin romper clases internas de Streamlit)
+# 2. CSS Seguro (Estilo Azul + Amarillo)
 st.markdown("""
     <style>
     .header-container {
@@ -109,8 +109,8 @@ if pdf is not None:
             c1.metric("Páginas Totales", len(pdf_reader.pages))
             c2.metric("Caracteres Extraídos", f"{len(text):,}")
             c3.metric("Palabras Procesadas", f"{len(text.split()):,}")
-            
-# Análisis de Palabras Clave
+
+            # Análisis de Palabras Clave
             st.divider()
             st.subheader("🔑 Palabras Más Frecuentes")
             
@@ -118,3 +118,53 @@ if pdf is not None:
             stopwords = {"sobre", "entre", "hasta", "desde", "donde", "cuando", "porque", "esta", "este", "estos", "mismo", "tiene", "todos"}
             filtered_words = [w for w in words if w not in stopwords]
             common_words = Counter(filtered_words).most_common(5)
+
+            k_cols = st.columns(len(common_words))
+            for idx, (word, count) in enumerate(common_words):
+                k_cols[idx].metric(label=f"#{idx+1} {word.capitalize()}", value=f"{count}x")
+
+            # Separación de Texto y FAISS
+            text_splitter = CharacterTextSplitter(
+                separator="\n",
+                chunk_size=700,
+                chunk_overlap=100,
+                length_function=len
+            )
+            chunks = text_splitter.split_text(text)
+
+            with st.spinner("⚡ Creando base de conocimiento con Gemini Embeddings..."):
+                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+                knowledge_base = FAISS.from_texts(chunks, embeddings)
+                llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2)
+
+            # Sección de Preguntas
+            st.divider()
+            st.subheader("💬 2. Haz una Pregunta al PDF")
+            user_question = st.text_input("Escribe tu consulta sobre el texto:", placeholder="Ej: ¿Cuáles son las conclusiones principales?")
+
+            if user_question:
+                with st.spinner("🔍 Consultando al modelo..."):
+                    docs = knowledge_base.similarity_search(user_question, k=3)
+                    
+                    context_text = "\n\n".join([doc.page_content for doc in docs])
+                    prompt = ChatPromptTemplate.from_template(
+                        "Responde a la siguiente pregunta utilizando únicamente el contexto proveído.\n"
+                        "Si la respuesta no está presente en el contexto, indica amablemente que no se encuentra en el archivo.\n\n"
+                        "Contexto:\n{context}\n\n"
+                        "Pregunta: {question}"
+                    )
+                    chain = prompt | llm | StrOutputParser()
+                    response = chain.invoke({"context": context_text, "question": user_question})
+
+                    st.markdown("#### 🤖 Respuesta:")
+                    st.info(response)
+
+                    with st.expander("🔎 Ver fragmentos recuperados (RAG Context)"):
+                        for i, doc in enumerate(docs):
+                            st.write(f"**Fragmento {i+1}:**")
+                            st.caption(doc.page_content)
+
+        except Exception as e:
+            st.error(f"Error procesando el PDF: {str(e)}")
+else:
+    st.info("💡 Sube un archivo PDF en el panel superior para comenzar.")
