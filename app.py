@@ -57,8 +57,8 @@ st.markdown("""
 # 3. Encabezado principal
 st.markdown("""
     <div class="header-container">
-        <h1 class="header-title">⚡ RAG PDF <span class="yellow-txt">Studio</span></h1>
-        <p class="header-sub">Análisis inteligente de documentos con IA y búsqueda vectorial</p>
+        <h1 class="header-title">⚡ RAG PDF <span class="yellow-txt">Studio Melo</span></h1>
+        <p class="header-sub">Análisis inteligente de documentos con IA y búsqueda vectorial, bien bacano ve</p>
     </div>
 """, unsafe_allow_html=True)
 
